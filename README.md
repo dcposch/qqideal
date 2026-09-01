@@ -45,7 +45,8 @@ Ideal(["x^2"], ring=R).radical_member("x").kind         # Kind.EMPTY: x is in th
 
 A unit ideal over Q from msolve `-g` is `Certainty.MODULAR`, not `PROVEN`: msolve 0.10.1
 returns after its first modular prime and still prints characteristic 0. A nonempty result
-over Q, and any result over a prime field, is `Certainty.PROVEN`.
+over Q uses a lifted `-g 2` basis and is `Certainty.PROVEN`, as is any result over a prime
+field.
 
 ## Saturation
 

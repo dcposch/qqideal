@@ -115,14 +115,15 @@ class Ideal:
     def leading_monomials(self, timeout: float = 60) -> tuple[tuple[int, ...], ...]:
         """Leading monomials of the grevlex Groebner basis, as exponent vectors.
 
-        Uses msolve's ``-g 1``, which computes the leading ideal directly and is
-        cheaper than asking for the basis. The unit ideal comes back as the
-        single all-zero vector (the constant monomial ``1``); the zero ideal
-        comes back empty.
+        Over Q this uses ``-g 2`` and takes leading terms of the lifted basis
+        (msolve 0.10.1's ``-g 1`` is unlifted). Over a prime field it uses
+        ``-g 1``. The unit ideal comes back as the single all-zero vector (the
+        constant monomial ``1``); the zero ideal comes back empty.
         """
         if self.is_zero_ideal:
             return ()
-        result = self._run(gb=1, timeout=timeout)
+        gb = 1 if self._ring.characteristic else 2
+        result = self._run(gb=gb, timeout=timeout)
         return self._leading_from(result)
 
     # -- verdicts --------------------------------------------------------
@@ -130,9 +131,12 @@ class Ideal:
     def verdict(self, timeout: float = 60) -> Verdict:
         """Emptiness, dimension and 0-dimensional degree in one msolve call.
 
-        Dimension and degree are read combinatorially off the leading ideal
-        (``-g 1``). A msolve timeout or crash becomes :attr:`Kind.TIMEOUT` or
-        :attr:`Kind.ERROR` rather than an exception; bad input still raises.
+        Dimension and degree are read combinatorially off the leading
+        monomials. Over Q the call is ``-g 2`` so a nonempty result is a
+        lifted basis (msolve 0.10.1 skips the lift for ``-g 1``). Over a
+        prime field ``-g 1`` is exact. A msolve timeout or crash becomes
+        :attr:`Kind.TIMEOUT` or :attr:`Kind.ERROR` rather than an exception;
+        bad input still raises.
 
         Certainty, for msolve 0.10.1: over a prime field, :attr:`
         Certainty.PROVEN` for that field. Over Q, a unit ideal is
@@ -150,7 +154,9 @@ class Ideal:
                 detail="zero ideal; no msolve call needed",
             )
         try:
-            result = self._run(gb=1, timeout=timeout)
+            # Over Q, -g 1 is unlifted (first modular prime). Use -g 2 so a
+            # nonempty basis is actually over Q; take leading terms in flint.
+            result = self._run(gb=2 if not proven_field else 1, timeout=timeout)
         except MsolveTimeout as exc:
             return Verdict(
                 kind=Kind.TIMEOUT,
