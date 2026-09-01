@@ -7,11 +7,11 @@ No solver-mode I/O.
 ## Install
 
 ```
-pip install git+https://github.com/dcposch/qqideal.git
+pip install qqideal
 ```
 
-That pulls [msolveio](https://github.com/dcposch/msolveio) from GitHub and python-flint from
-PyPI. You also need a system `msolve` 0.10.x binary on `PATH`.
+That pulls [msolveio](https://pypi.org/project/msolveio/) and python-flint from PyPI. You also
+need a system `msolve` 0.10.x binary on `PATH`.
 
 ## Usage
 

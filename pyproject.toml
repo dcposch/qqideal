@@ -20,7 +20,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "msolveio @ git+https://github.com/dcposch/msolveio.git",
+    "msolveio>=0.1.0",
     "python-flint>=0.8,<1",
 ]
 
