@@ -23,12 +23,17 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Iterable, Iterator, Sequence
 
-from flint import Ordering, fmpq, fmpq_mpoly, fmpq_mpoly_ctx
+from flint import Ordering, fmpq, fmpq_mpoly, fmpq_mpoly_ctx, fmpq_poly
 from msolveio import emit_system
 
 from .errors import MsolveInputError, RingMismatch
 
 __all__ = ["Ring", "Poly"]
+
+#: Ascending rational coefficients of a univariate polynomial in the RUR
+#: parameter ``t``. The exchange format between this module's flint facade and
+#: :mod:`qqideal.witness`; plain data so flint types never leave this file.
+Ascending = tuple[Fraction, ...]
 
 _TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9]*|[0-9]+|[+\-*/^]|\s+")
 
@@ -322,6 +327,111 @@ class Poly:
 
     def __repr__(self) -> str:
         return f"Poly({str(self._raw)!r}, {self._ring!r})"
+
+
+# -- univariate facade for qqideal.witness ---------------------------------
+#
+# These functions are the only flint entry points witness extraction uses.
+# They speak plain data -- ascending Fraction tuples in and out -- so the
+# "every call into python-flint is made from this module" rule above stays
+# literally true.
+
+
+def _univariate(ascending: "Sequence[Fraction | int]") -> fmpq_poly:
+    return fmpq_poly([_to_fmpq(Fraction(c)) for c in ascending])
+
+
+def _ascending(poly: fmpq_poly) -> Ascending:
+    return tuple(
+        Fraction(int(c.numerator), int(c.denominator)) for c in poly.coeffs()
+    )
+
+
+def factor_univariate(ascending: "Sequence[Fraction | int]") -> tuple[tuple[Ascending, int], ...]:
+    """Monic irreducible factors over Q, with multiplicities.
+
+    The unit content is dropped. Factors are returned deterministically sorted
+    by (degree, coefficients), each as ascending coefficients.
+    """
+    poly = _univariate(ascending)
+    if poly.degree() < 1:
+        raise ValueError(f"nothing to factor: degree {poly.degree()}")
+    _, factors = poly.factor()
+    monic: list[tuple[Ascending, int]] = []
+    for factor, multiplicity in factors:
+        if factor.degree() < 1:
+            continue
+        monic.append(
+            (
+                _ascending(factor * (1 / factor.leading_coefficient())),
+                int(multiplicity),
+            )
+        )
+    return tuple(sorted(monic, key=lambda pair: (len(pair[0]), pair[0])))
+
+
+def coordinate_mod(
+    v_ascending: "Sequence[Fraction | int]",
+    scale: int,
+    wprime_ascending: "Sequence[Fraction | int]",
+    min_poly_ascending: "Sequence[Fraction | int]",
+) -> Ascending:
+    """One RUR coordinate ``-v(t) / (scale * w'(t))`` reduced mod ``g``.
+
+    ``g`` must be irreducible with ``w'`` invertible mod ``g`` -- true exactly
+    when ``g`` is a simple factor of ``w``. The result is the ascending
+    coefficient vector of the coordinate in ``Q[t]/(g)``, padded to length
+    ``deg g``.
+
+    :raises ValueError: if ``w'`` is not invertible mod ``g``, which means the
+        eliminating polynomial was not squarefree.
+    """
+    g = _univariate(min_poly_ascending)
+    denominator = divmod(_univariate(wprime_ascending) * scale, g)[1]
+    gcd, s, _ = denominator.xgcd(g)
+    if gcd.degree() != 0:
+        raise ValueError(
+            "w'(t) is not invertible modulo the given factor of w; the "
+            "eliminating polynomial is not squarefree there"
+        )
+    inverse = s * (1 / gcd.leading_coefficient())
+    coordinate = divmod(-_univariate(v_ascending) * inverse, g)[1]
+    coefficients = _ascending(coordinate)
+    return coefficients + (Fraction(0),) * (g.degree() - len(coefficients))
+
+
+def vanishes_at_algebraic(
+    terms: "Iterable[tuple[tuple[int, ...], fmpq]]",
+    coordinates: "Sequence[Sequence[Fraction | int]]",
+    min_poly_ascending: "Sequence[Fraction | int]",
+) -> bool:
+    """Whether a multivariate polynomial vanishes at an algebraic point.
+
+    ``terms`` is :meth:`Poly.terms` output; ``coordinates`` gives each variable
+    as an element of ``Q[t]/(g)``. Exact arithmetic throughout: a ``True`` is a
+    substitution proof.
+    """
+    g = _univariate(min_poly_ascending)
+    coords = [_univariate(c) for c in coordinates]
+    total = fmpq_poly([])
+    for exponents, coefficient in terms:
+        term = fmpq_poly([coefficient])
+        for coordinate, exponent in zip(coords, exponents):
+            if exponent:
+                term = divmod(term * _powmod(coordinate, exponent, g), g)[1]
+        total = divmod(total + term, g)[1]
+    return bool(total.is_zero())
+
+
+def _powmod(base: fmpq_poly, exponent: int, modulus: fmpq_poly) -> fmpq_poly:
+    result = fmpq_poly([1])
+    base = divmod(base, modulus)[1]
+    while exponent:
+        if exponent & 1:
+            result = divmod(result * base, modulus)[1]
+        base = divmod(base * base, modulus)[1]
+        exponent >>= 1
+    return result
 
 
 def _to_fmpq(value: Scalar) -> fmpq:

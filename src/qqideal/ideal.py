@@ -17,7 +17,7 @@ ideal is not ``I : f^oo`` written in ``R``, but its variety is the graph of
 
 from __future__ import annotations
 
-from typing import Iterable, NoReturn, Sequence
+from typing import TYPE_CHECKING, Iterable, NoReturn, Sequence
 
 from msolveio import RunResult, emit_system, run_groebner
 from msolveio.errors import MsolveDied, MsolveOutputError, MsolveTimeout
@@ -26,6 +26,9 @@ from .dimdeg import dim_and_degree
 from .errors import MsolveInputError, RingMismatch
 from .ring import Poly, Ring
 from .verdict import Certainty, Kind, Verdict
+
+if TYPE_CHECKING:  # pragma: no cover - import cycle broken at runtime
+    from .witness import Witnesses
 
 __all__ = ["Ideal"]
 
@@ -227,6 +230,27 @@ class Ideal:
             "available as Ideal.radical_member(g), which is a single Groebner "
             "basis computation."
         )
+
+    # -- witness points --------------------------------------------------
+
+    def witness_points(self, timeout: float = 60) -> "Witnesses":
+        """Exact witness points of this ideal, when it is zero-dimensional.
+
+        Runs msolve's rational parametrization (``-P``) and factors the
+        eliminating polynomial over Q. Each returned point is substituted back
+        into every generator with exact arithmetic before it is returned; see
+        :mod:`qqideal.witness` for what is proven and what is msolve's claim.
+
+        :param timeout: wall-clock limit for msolve, in seconds.
+        :returns: a :class:`~qqideal.Witnesses`; a msolve timeout or crash
+            becomes :attr:`~qqideal.WitnessKind.TIMEOUT` or
+            :attr:`~qqideal.WitnessKind.ERROR` rather than an exception.
+        :raises NotImplementedError: on a prime-field ring; witness extraction
+            is a characteristic-0 activity.
+        """
+        from .witness import extract
+
+        return extract(self, timeout=timeout)
 
     # -- saturation ------------------------------------------------------
 

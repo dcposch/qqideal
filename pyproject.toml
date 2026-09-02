@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "qqideal"
-version = "0.1.0"
+version = "0.2.0"
 description = "Exact ideals over QQ: python-flint for arithmetic, msolve for Groebner bases."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,7 +20,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "msolveio>=0.1.0",
+    "msolveio>=0.2.0",
     "python-flint>=0.8,<1",
 ]
 
